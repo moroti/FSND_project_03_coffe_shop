@@ -31,7 +31,43 @@ class AuthError(Exception):
     return the token part of the header
 '''
 def get_token_auth_header():
-   raise Exception('Not Implemented')
+    """ Retreive the Access Token from Authorization Header
+    """
+    auth = request.headers.get('Authorization', None)
+
+    # If authorization header is missing
+    if not auth:
+        raise AuthError({
+            'code': 'authoriation_header_missing',
+            'description': 'Authorization header is expected'},
+            401
+        )
+
+    auth_parts = auth.split(' ')
+
+    # Check whether the authorization key is well formed or not
+    if auth_parts[0].lower() != 'bearer':
+        raise AuthError({
+            'code': 'bearer_prefix_missing',
+            'description': 'This is not a bearer token. A bearer token start with the keyword Bearer'},
+            401
+        )
+    elif len(auth_parts) < 2:
+        raise AuthError({
+            'code': 'token_missing'
+            'description': 'Invalid bearer key. A bearer key must have two parts, a bearer prefix and a token'},
+            401
+        )
+    elif len(auth_parts) > 2:
+        raise AuthError({
+            'code': 'token_missing'
+            'description': 'Invalid bearer key. A bearer have only two parts, a bearer prefix and a token'},
+            401
+        )
+
+    # If the auth key has two parts and start with bearer keyword
+    token = auth_parts[1]
+    return token
 
 '''
 @TODO implement check_permissions(permission, payload) method
@@ -45,7 +81,22 @@ def get_token_auth_header():
     return true otherwise
 '''
 def check_permissions(permission, payload):
-    raise Exception('Not Implemented')
+    # raise Exception('Not Implemented')
+    if 'permissions' not in payload:
+        raise AuthError({
+            'code': 'no_permissions',
+            'description': 'The token payload does not include permissions'
+        }, 401)
+
+    if permission not in payload['permissions']:
+        raise AuthError({
+            'code': 'permission_not_granted',
+            'description': 'This permission is not granted or not exist'
+        }, 401)
+    
+    return true
+
+    
 
 '''
 @TODO implement verify_decode_jwt(token) method
@@ -61,7 +112,55 @@ def check_permissions(permission, payload):
     !!NOTE urlopen has a common certificate error described here: https://stackoverflow.com/questions/50236117/scraping-ssl-certificate-verify-failed-error-for-http-en-wikipedia-org
 '''
 def verify_decode_jwt(token):
-    raise Exception('Not Implemented')
+    # raise Exception('Not Implemented')
+    jsonurl = urlopen('https://'+AUTH0_DOMAIN+'/.well-known/jwks.json')
+    jwks = json.loads(jsonurl.read())
+    unverified_header = jwt.get_unverified_header(token)
+    rsa_key = {}
+    for key in jwks['keys']:
+        if key['kid'] == unverified_header['kid']:
+            rsa_key == {
+                'kid': key['kid'],
+                'kty': key['kty'],
+                'use': key['use'],
+                'e': key['e'],
+                'n': key['n']
+            }
+
+    if rsa_key:
+        try:
+            payload = jwt.decode(
+                token,
+                rsa_key,
+                algorithms=ALGORITHMS,
+                audience=API_AUDIENCE,
+                issuer="https://"+AUTH0_DOMAIN+"/"
+            )
+        except jwt.ExpiredSignatureError:
+            raise AuthError({
+                "code": "token_expired",
+                "description": "token is expired"
+            }, 401)
+        except jwt.JWTClaimsError:
+            raise AuthError({
+                "code": "invalid_claims",
+                "description": "incorrect claims,"
+                " please check audience and issuer"
+            })
+        except Exception:
+            raise AuthError({
+                "code": "invalid_haeder",
+                "description": "unable to parse authentication token"
+            }, 401)
+    else:
+        raise AuthError({
+            "code": "invalid_haeder",
+            "description": "unable to parse authentication token"
+        }, 401)
+
+    return payload
+
+
 
 '''
 @TODO implement @requires_auth(permission) decorator method
