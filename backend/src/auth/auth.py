@@ -43,7 +43,7 @@ def get_token_auth_header():
             401
         )
 
-    auth_parts = auth.split(' ')
+    auth_parts = auth.split()
 
     # Check whether the authorization key is well formed or not
     if auth_parts[0].lower() != 'bearer':
@@ -54,19 +54,20 @@ def get_token_auth_header():
         )
     elif len(auth_parts) < 2:
         raise AuthError({
-            'code': 'token_missing'
+            'code': 'token_missing',
             'description': 'Invalid bearer key. A bearer key must have two parts, a bearer prefix and a token'},
             401
         )
     elif len(auth_parts) > 2:
         raise AuthError({
-            'code': 'token_missing'
+            'code': 'token_missing',
             'description': 'Invalid bearer key. A bearer have only two parts, a bearer prefix and a token'},
             401
         )
 
     # If the auth key has two parts and start with bearer keyword
     token = auth_parts[1]
+    # print(token)
     return token
 
 '''
@@ -86,15 +87,15 @@ def check_permissions(permission, payload):
         raise AuthError({
             'code': 'no_permissions',
             'description': 'The token payload does not include permissions'
-        }, 401)
+        }, 400)
 
     if permission not in payload['permissions']:
         raise AuthError({
             'code': 'permission_not_granted',
             'description': 'This permission is not granted or not exist'
-        }, 401)
+        }, 403)
     
-    return true
+    return True
 
     
 
@@ -116,10 +117,11 @@ def verify_decode_jwt(token):
     jsonurl = urlopen('https://'+AUTH0_DOMAIN+'/.well-known/jwks.json')
     jwks = json.loads(jsonurl.read())
     unverified_header = jwt.get_unverified_header(token)
+    # print(unverified_header)
     rsa_key = {}
     for key in jwks['keys']:
         if key['kid'] == unverified_header['kid']:
-            rsa_key == {
+            rsa_key = {
                 'kid': key['kid'],
                 'kty': key['kty'],
                 'use': key['use'],
@@ -128,6 +130,7 @@ def verify_decode_jwt(token):
             }
 
     if rsa_key:
+        # print(rsa_key)
         try:
             payload = jwt.decode(
                 token,
@@ -136,6 +139,7 @@ def verify_decode_jwt(token):
                 audience=API_AUDIENCE,
                 issuer="https://"+AUTH0_DOMAIN+"/"
             )
+            # print(payload)
         except jwt.ExpiredSignatureError:
             raise AuthError({
                 "code": "token_expired",
@@ -149,12 +153,12 @@ def verify_decode_jwt(token):
             })
         except Exception:
             raise AuthError({
-                "code": "invalid_haeder",
+                "code": "invalid_header",
                 "description": "unable to parse authentication token"
             }, 401)
     else:
         raise AuthError({
-            "code": "invalid_haeder",
+            "code": "invalid_header",
             "description": "unable to parse authentication token"
         }, 401)
 
